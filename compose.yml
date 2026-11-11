@@ -1,0 +1,32 @@
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: avaliacoes
+      POSTGRES_USER: simulado
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U simulado -d avaliacoes"]
+      interval: 5s
+      retries: 10
+
+  backend:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8081:8080"
+    environment:
+      DB_URL: jdbc:postgresql://db:5432/avaliacoes
+      DB_USER: simulado
+      DB_PASSWORD: ${DB_PASSWORD}
+      FRONTEND_URL: ${FRONTEND_URL}
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  postgres_data:

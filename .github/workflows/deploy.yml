@@ -1,0 +1,56 @@
+
+name: Deploy Backend AWS
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configurar Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+
+      - name: Compilar
+        run: |
+          chmod +x mvnw
+          ./mvnw -B -DskipTests package
+          cp target/*.jar app.jar
+
+      - name: Configurar SSH
+        env:
+          SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+          SSH_HOST: ${{ secrets.EC2_HOST }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ec2
+          chmod 600 ~/.ssh/id_ec2
+          ssh-keyscan -H "$SSH_HOST" >> ~/.ssh/known_hosts
+
+      - name: Enviar arquivos
+        env:
+          SSH_HOST: ${{ secrets.EC2_HOST }}
+        run: |
+          ssh -i ~/.ssh/id_ec2 ubuntu@"$SSH_HOST" \
+            "mkdir -p ~/simulado"
+
+          scp -i ~/.ssh/id_ec2 \
+            app.jar Dockerfile compose.yml \
+            ubuntu@"$SSH_HOST":~/simulado/
+
+      - name: Subir containers
+        env:
+          SSH_HOST: ${{ secrets.EC2_HOST }}
+        run: |
+          ssh -i ~/.ssh/id_ec2 ubuntu@"$SSH_HOST" \
+            "cd ~/simulado && docker compose -p simulado up -d --build"
